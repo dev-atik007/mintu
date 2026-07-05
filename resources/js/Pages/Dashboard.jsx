@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
 // Tailor-oriented translation and styling details
@@ -35,15 +35,26 @@ const monthsList = [
     { number: '12', name: 'December (ডিসেম্বর)' },
 ];
 
+const formatMoney = (amount) => {
+    if (amount === undefined || amount === null) return '0.00';
+    return Number(amount).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+};
+
 export default function Dashboard({ transactions = [], stats = {} }) {
     const { flash } = usePage().props;
+    const { url } = usePage();
     const [searchQuery, setSearchQuery] = useState('');
     
-    // activeTab: daily (default), monthly, yearly
+    // activeTab: daily (default), monthly, all-months, yearly
     const [activeTab, setActiveTab] = useState(() => {
         if (typeof window !== 'undefined') {
-            const tab = new URLSearchParams(window.location.search).get('tab');
+            const searchParams = new URLSearchParams(url.includes('?') ? url.substring(url.indexOf('?')) : window.location.search);
+            const tab = searchParams.get('tab');
             if (tab === 'monthly') return 'monthly';
+            if (tab === 'all-months') return 'all-months';
             if (tab === 'yearly') return 'yearly';
             return 'daily';
         }
@@ -51,14 +62,13 @@ export default function Dashboard({ transactions = [], stats = {} }) {
     });
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const tab = params.get('tab');
-            if (tab === 'monthly') setActiveTab('monthly');
-            else if (tab === 'yearly') setActiveTab('yearly');
-            else setActiveTab('daily');
-        }
-    }, [typeof window !== 'undefined' ? window.location.search : null]);
+        const searchParams = new URLSearchParams(url.includes('?') ? url.substring(url.indexOf('?')) : window.location.search);
+        const tab = searchParams.get('tab');
+        if (tab === 'monthly') setActiveTab('monthly');
+        else if (tab === 'all-months') setActiveTab('all-months');
+        else if (tab === 'yearly') setActiveTab('yearly');
+        else setActiveTab('daily');
+    }, [url]);
     
     // Bottom Drawer State
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -184,9 +194,32 @@ export default function Dashboard({ transactions = [], stats = {} }) {
     const todayIncomes = todayTransactions.filter(t => t.type === 'income');
     const todayExpenses = todayTransactions.filter(t => t.type === 'expense');
 
-    // Filter Monthly transactions (current calendar month)
-    const currentYearMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    const monthlyTransactions = transactions.filter(t => t.date.startsWith(currentYearMonth));
+    // Filter Monthly transactions (current calendar month or selected from URL)
+    const [selectedMonth, setSelectedMonth] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const searchParams = new URLSearchParams(url.includes('?') ? url.substring(url.indexOf('?')) : window.location.search);
+            const m = searchParams.get('month');
+            if (m) return m;
+        }
+        // Offset timezone properly so new Date() gives Bangladesh month
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 7);
+    });
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(url.includes('?') ? url.substring(url.indexOf('?')) : window.location.search);
+        const m = searchParams.get('month');
+        if (m) {
+            setSelectedMonth(m);
+        } else {
+            const d = new Date();
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            setSelectedMonth(d.toISOString().slice(0, 7));
+        }
+    }, [url]);
+
+    const monthlyTransactions = transactions.filter(t => t.date.startsWith(selectedMonth));
 
     // Category breakdowns for analytics
     const getCategoryBreakdown = (type, list) => {
@@ -254,32 +287,42 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         {activeTab === 'daily' 
                             ? 'Daily Tracker (আজকের হিসাব)' 
                             : activeTab === 'monthly' 
-                                ? 'Monthly Calculation (মাসিক হিসাব)' 
-                                : 'Yearly Summary (বার্ষিক হিসাব)'}
+                                ? (() => {
+                                    const [y, m] = selectedMonth.split('-');
+                                    const mName = monthsList.find(x => x.number === m)?.name || selectedMonth;
+                                    return `Monthly Calculation (${mName} ${y})`;
+                                })()
+                                : activeTab === 'all-months'
+                                    ? 'All Month Data (সকল মাসের হিসাব)'
+                                    : 'Yearly Summary (বার্ষিক হিসাব)'}
                     </h1>
                     <p className="text-xs text-gray-400 mt-0.5">
                         {activeTab === 'daily' 
                             ? 'Tailoring daily earn & spend (resets automatically every 24h)' 
                             : activeTab === 'monthly'
                                 ? 'Detailed summary of earnings, spending, and savings for this month'
-                                : 'Comprehensive overview of tailoring calculations across all months of the year'}
+                                : activeTab === 'all-months'
+                                    ? 'Overview of income and expenses for every month'
+                                    : 'Comprehensive overview of tailoring calculations across all months of the year'}
                     </p>
                 </div>
 
-                <div className="hidden sm:flex items-center gap-2">
-                    <button
-                        onClick={() => openCreateDrawer('income')}
-                        className="px-4 py-2 rounded-xl bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold transition-all hover:bg-emerald-600/40"
-                    >
-                        + Earn (আয়)
-                    </button>
-                    <button
-                        onClick={() => openCreateDrawer('expense')}
-                        className="px-4 py-2 rounded-xl bg-rose-600/25 border border-rose-500/30 text-rose-400 text-xs font-extrabold transition-all hover:bg-rose-600/40"
-                    >
-                        + Spend (খরচ)
-                    </button>
-                </div>
+                {activeTab === 'daily' && (
+                    <div className="hidden sm:flex items-center gap-2">
+                        <button
+                            onClick={() => openCreateDrawer('income')}
+                            className="px-4 py-2 rounded-xl bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold transition-all hover:bg-emerald-600/40"
+                        >
+                            + Earn (আয়)
+                        </button>
+                        <button
+                            onClick={() => openCreateDrawer('expense')}
+                            className="px-4 py-2 rounded-xl bg-rose-600/25 border border-rose-500/30 text-rose-400 text-xs font-extrabold transition-all hover:bg-rose-600/40"
+                        >
+                            + Spend (খরচ)
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* DAILY TRACKER TAB VIEW */}
@@ -289,16 +332,16 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                     <div className="grid grid-cols-3 gap-3 p-4 bg-white/[0.01] border border-white/5 rounded-3xl">
                         <div className="text-center py-2 border-r border-white/5">
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Today's Income (আজকের আয়)</span>
-                            <span className="text-lg font-black text-emerald-400">{stats.todayIncome?.toLocaleString()} ৳</span>
+                            <span className="text-lg font-black text-emerald-400">{formatMoney(stats.todayIncome)} ৳</span>
                         </div>
                         <div className="text-center py-2 border-r border-white/5">
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Today's Expense (আজকের খরচ)</span>
-                            <span className="text-lg font-black text-rose-400">{stats.todayExpense?.toLocaleString()} ৳</span>
+                            <span className="text-lg font-black text-rose-400">{formatMoney(stats.todayExpense)} ৳</span>
                         </div>
                         <div className="text-center py-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Balance (অবশিষ্ট লাভ)</span>
                             <span className={`text-lg font-black ${(stats.todayIncome - stats.todayExpense) >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
-                                {(stats.todayIncome - stats.todayExpense)?.toLocaleString()} ৳
+                                {formatMoney(stats.todayIncome - stats.todayExpense)} ৳
                             </span>
                         </div>
                     </div>
@@ -337,7 +380,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-xs font-black text-emerald-400">+{tx.amount} ৳</span>
+                                                    <span className="text-xs font-black text-emerald-400">+{formatMoney(tx.amount)} ৳</span>
                                                     <div className="flex items-center gap-1">
                                                         <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
                                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -394,7 +437,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-xs font-black text-rose-400">-{tx.amount} ৳</span>
+                                                    <span className="text-xs font-black text-rose-400">-{formatMoney(tx.amount)} ৳</span>
                                                     <div className="flex items-center gap-1">
                                                         <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
                                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -423,25 +466,30 @@ export default function Dashboard({ transactions = [], stats = {} }) {
             )}
 
             {/* MONTHLY SUMMARY TAB VIEW */}
-            {activeTab === 'monthly' && (
+            {activeTab === 'monthly' && (() => {
+                const selectedMonthIncome = monthlyTransactions.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
+                const selectedMonthExpense = monthlyTransactions.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
+                const selectedMonthBenefit = selectedMonthIncome - selectedMonthExpense;
+
+                return (
                 <div className="space-y-6">
                     {/* Monthly KPI Stats cards */}
                     <div className="grid grid-cols-3 gap-3">
                         <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-violet-900/60 to-indigo-950/70 border border-violet-500/20 relative overflow-hidden shadow-md">
                             <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider block mb-1">Monthly Balance (মাসিক অবশিষ্ট)</span>
-                            <h2 className="text-xl font-black text-white">{stats.netBenefit?.toLocaleString()} ৳</h2>
+                            <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthBenefit)} ৳</h2>
                             <span className="text-[9px] text-gray-400 block mt-1">Remaining Net Savings/Profit</span>
                         </div>
 
                         <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-emerald-950/40 to-[#0c1410]/80 border border-emerald-500/20 relative overflow-hidden shadow-md">
                             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">Monthly Earnings (মাসিক মোট আয়)</span>
-                            <h2 className="text-xl font-black text-white">{stats.monthlyIncome?.toLocaleString()} ৳</h2>
+                            <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthIncome)} ৳</h2>
                             <span className="text-[9px] text-gray-400 block mt-1">Total incoming cash</span>
                         </div>
 
                         <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-rose-950/40 to-[#170e0f]/80 border border-rose-500/20 relative overflow-hidden shadow-md">
                             <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">Monthly Spending (মাসিক মোট খরচ)</span>
-                            <h2 className="text-xl font-black text-white">{stats.monthlyExpense?.toLocaleString()} ৳</h2>
+                            <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthExpense)} ৳</h2>
                             <span className="text-[9px] text-gray-400 block mt-1">Total outgoing cash</span>
                         </div>
                     </div>
@@ -452,7 +500,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         <div className="bg-white/[0.01] border border-white/5 p-5 rounded-3xl">
                             <h3 className="text-xs font-extrabold text-white mb-4 border-b border-white/5 pb-2.5 flex justify-between items-center">
                                 <span>Monthly Income Sectors (আয়ের প্রধান খাত)</span>
-                                <span className="text-[10px] text-emerald-400">Total: {stats.monthlyIncome} ৳</span>
+                                <span className="text-[10px] text-emerald-400">Total: {formatMoney(selectedMonthIncome)} ৳</span>
                             </h3>
                             {monthlyIncomeBreakdown.length > 0 ? (
                                 <div className="space-y-4">
@@ -462,7 +510,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                             <div key={item.category} className="space-y-1">
                                                 <div className="flex justify-between text-xs">
                                                     <span className="font-semibold text-gray-300">{details.label}</span>
-                                                    <span className="text-gray-400">{item.amount} ৳ ({item.percentage}%)</span>
+                                                    <span className="text-gray-400">{formatMoney(item.amount)} ৳</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                                                     <div 
@@ -483,7 +531,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         <div className="bg-white/[0.01] border border-white/5 p-5 rounded-3xl">
                             <h3 className="text-xs font-extrabold text-white mb-4 border-b border-white/5 pb-2.5 flex justify-between items-center">
                                 <span>Monthly Expense Sectors (খরচের প্রধান খাত)</span>
-                                <span className="text-[10px] text-rose-400">Total: {stats.monthlyExpense} ৳</span>
+                                <span className="text-[10px] text-rose-400">Total: {formatMoney(selectedMonthExpense)} ৳</span>
                             </h3>
                             {monthlyExpenseBreakdown.length > 0 ? (
                                 <div className="space-y-4">
@@ -493,7 +541,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                             <div key={item.category} className="space-y-1">
                                                 <div className="flex justify-between text-xs">
                                                     <span className="font-semibold text-gray-300">{details.label}</span>
-                                                    <span className="text-gray-400">{item.amount} ৳ ({item.percentage}%)</span>
+                                                    <span className="text-gray-400">{formatMoney(item.amount)} ৳</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                                                     <div 
@@ -519,37 +567,67 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         </div>
 
                         {monthlyTransactions.length > 0 ? (
-                            <div className="space-y-2">
-                                {monthlyTransactions.map((tx) => {
-                                    const details = categoryDetails[tx.category] || { label: tx.category, icon: '📦' };
+                            <div className="space-y-6">
+                                {Object.keys(monthlyTransactions.reduce((acc, tx) => {
+                                    if (!acc[tx.date]) acc[tx.date] = [];
+                                    acc[tx.date].push(tx);
+                                    return acc;
+                                }, {})).sort((a, b) => new Date(b) - new Date(a)).map(dateStr => {
+                                    const txsForDate = monthlyTransactions.filter(t => t.date === dateStr);
+                                    const dateObj = new Date(dateStr);
+                                    
+                                    const bnDays = { 'Sunday': 'রবিবার', 'Monday': 'সোমবার', 'Tuesday': 'মঙ্গলবার', 'Wednesday': 'বুধবার', 'Thursday': 'বৃহস্পতিবার', 'Friday': 'শুক্রবার', 'Saturday': 'শনিবার' };
+                                    const dayNameEn = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+                                    const dayNameBn = bnDays[dayNameEn] || '';
+                                    const formattedDate = `${dayNameEn} (${dayNameBn}), ${dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`;
+                                    
+                                    const dailyIncome = txsForDate.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                                    const dailyExpense = txsForDate.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                                    const dailyBal = dailyIncome - dailyExpense;
+
                                     return (
-                                        <div
-                                            key={tx.id}
-                                            className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-4 rounded-2xl hover:bg-white/[0.03] transition-all"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xl">{details.icon}</span>
-                                                <div>
-                                                    <h4 className="text-xs font-bold text-white">{details.label}</h4>
-                                                    <span className="text-[9px] text-gray-500 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/5">{tx.date}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                    {tx.type === 'income' ? '+' : '-'}{tx.amount} ৳
+                                        <div key={dateStr} className="space-y-3">
+                                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                                <h4 className="text-sm font-bold text-violet-300">{formattedDate}</h4>
+                                                <span className={`text-xs font-bold ${dailyBal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    Bal: {dailyBal >= 0 ? '+' : ''}{formatMoney(dailyBal)} ৳
                                                 </span>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
-                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                        </svg>
-                                                    </button>
-                                                    <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
-                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {txsForDate.map((tx) => {
+                                                    const details = categoryDetails[tx.category] || { label: tx.category, icon: '📦' };
+                                                    return (
+                                                        <div
+                                                            key={tx.id}
+                                                            className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-4 rounded-2xl hover:bg-white/[0.03] transition-all"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xl">{details.icon}</span>
+                                                                <div>
+                                                                    <h4 className="text-xs font-bold text-white">{details.label}</h4>
+                                                                    <span className="text-[9px] text-gray-500">{tx.description || 'No description'}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                    {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)} ৳
+                                                                </span>
+                                                                <div className="flex items-center gap-1">
+                                                                    <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
+                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
+                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );
@@ -562,125 +640,202 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         )}
                     </div>
                 </div>
+                );
+            })()}
+
+            {/* ALL MONTHS SUMMARY TAB VIEW */}
+            {activeTab === 'all-months' && (
+                <div className="space-y-10">
+                    {Object.entries(
+                        transactions.reduce((acc, tx) => {
+                            const year = tx.date.slice(0, 4);
+                            const monthKey = tx.date.slice(0, 7); // YYYY-MM
+                            if (!acc[year]) acc[year] = {};
+                            if (!acc[year][monthKey]) acc[year][monthKey] = { income: 0, expense: 0, count: 0 };
+                            if (tx.type === 'income') acc[year][monthKey].income += tx.amount;
+                            else acc[year][monthKey].expense += tx.amount;
+                            acc[year][monthKey].count++;
+                            return acc;
+                        }, {})
+                    ).sort((a, b) => b[0] - a[0]).map(([year, monthsObj]) => {
+                        const yearIncome = Object.values(monthsObj).reduce((sum, m) => sum + m.income, 0);
+                        const yearExpense = Object.values(monthsObj).reduce((sum, m) => sum + m.expense, 0);
+                        const yearBal = yearIncome - yearExpense;
+
+                        return (
+                            <div key={year} className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">
+                                        {year}
+                                    </h2>
+                                    <div className="h-px flex-1 bg-gradient-to-r from-violet-500/20 to-transparent"></div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Yearly Balance</div>
+                                        <div className={`text-sm font-black ${yearBal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {yearBal >= 0 ? '+' : ''}{formatMoney(yearBal)} ৳
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                    {Object.entries(monthsObj).sort((a, b) => b[0].localeCompare(a[0])).map(([monthKey, data]) => {
+                                        const [, monthStr] = monthKey.split('-');
+                                        const monthNum = parseInt(monthStr, 10);
+                                        const monthName = monthsList.find(m => parseInt(m.number, 10) === monthNum)?.name || monthKey;
+                                        const benefit = data.income - data.expense;
+
+                                        return (
+                                            <Link 
+                                                key={monthKey} 
+                                                href={`/dashboard?tab=monthly&month=${monthKey}`}
+                                                className="group block bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 p-5 rounded-3xl hover:border-violet-500/30 transition-all duration-300 relative overflow-hidden cursor-pointer"
+                                            >
+                                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500/50 to-cyan-500/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <h3 className="text-base font-extrabold text-white">{monthName}</h3>
+                                                        <span className="text-[10px] text-gray-500">{data.count} records</span>
+                                                    </div>
+                                                    <div className={`px-2 py-1 rounded-lg text-[10px] font-bold ${benefit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                                        {benefit >= 0 ? 'Profit' : 'Loss'}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="space-y-3 text-xs font-medium">
+                                                    <div className="flex justify-between items-center bg-white/[0.02] p-2 rounded-xl">
+                                                        <span className="text-gray-400">Income (আয়)</span>
+                                                        <span className="text-emerald-400">+{formatMoney(data.income)} ৳</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center bg-white/[0.02] p-2 rounded-xl">
+                                                        <span className="text-gray-400">Expense (খরচ)</span>
+                                                        <span className="text-rose-400">-{formatMoney(data.expense)} ৳</span>
+                                                    </div>
+                                                    <div className="pt-3 mt-1 border-t border-white/5 flex justify-between items-center text-sm">
+                                                        <span className="text-gray-300 font-bold">Balance</span>
+                                                        <span className={`font-black ${benefit >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
+                                                            {formatMoney(benefit)} ৳
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    
+                    {transactions.length === 0 && (
+                        <div className="text-center py-12 bg-white/[0.01] border border-dashed border-white/5 rounded-3xl">
+                            <p className="text-sm text-gray-500">No monthly records found</p>
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* YEARLY SUMMARY TAB VIEW */}
-            {activeTab === 'yearly' && (
-                <div className="space-y-6">
-                    {/* Year Selection dropdown */}
-                    <div className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-4 rounded-3xl">
-                        <span className="text-xs font-extrabold text-white">Select Accounting Year (বছর নির্বাচন করুন)</span>
-                        <select 
-                            value={selectedYear}
-                            onChange={(e) => {
-                                setSelectedYear(parseInt(e.target.value));
-                                setExpandedMonth(null);
-                            }}
-                            className="bg-[#0c0d14] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
-                        >
-                            {yearsRange.map(y => (
-                                <option key={y} value={y}>{y} ৳</option>
-                            ))}
-                        </select>
-                    </div>
+            {activeTab === 'yearly' && (() => {
+                const yearlyData = transactions.filter(t => t.date.startsWith(selectedYear.toString()));
+                const yearlyIncome = yearlyData.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
+                const yearlyExpense = yearlyData.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
+                const yearlyBenefit = yearlyIncome - yearlyExpense;
 
-                    {/* Months accordion list */}
-                    <div className="space-y-3">
-                        {monthsList.map((month) => {
-                            const data = getYearlyMonthData(month.number);
-                            const isExpanded = expandedMonth === month.number;
-                            
-                            return (
-                                <div 
-                                    key={month.number} 
-                                    className="bg-white/[0.01] border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all"
-                                >
-                                    {/* Month header row */}
-                                    <div 
-                                        onClick={() => setExpandedMonth(isExpanded ? null : month.number)}
-                                        className="p-4 flex items-center justify-between cursor-pointer active:bg-white/[0.02]"
-                                    >
-                                        <div>
-                                            <h4 className="text-xs font-bold text-white">{month.name}</h4>
-                                            <span className="text-[9px] text-gray-500">{data.count} records logged</span>
-                                        </div>
-
-                                        <div className="flex items-center gap-4 text-right">
-                                            <div className="hidden sm:flex gap-4 text-xs font-semibold">
-                                                <span className="text-emerald-400">+{data.income} ৳</span>
-                                                <span className="text-rose-400">-{data.expense} ৳</span>
-                                                <span className="text-violet-400">{data.benefit} ৳</span>
-                                            </div>
-                                            <div className="sm:hidden text-xs font-extrabold text-violet-400">
-                                                Bal: {data.benefit} ৳
-                                            </div>
-                                            <svg 
-                                                className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                                                fill="none" 
-                                                viewBox="0 0 24 24" 
-                                                stroke="currentColor"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </div>
+                return (
+                    <div className="space-y-8">
+                        {/* Year Selection and Summary Header */}
+                        <div className="bg-gradient-to-br from-violet-500/10 via-transparent to-cyan-500/10 border border-white/10 p-6 sm:p-8 rounded-3xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-cyan-500"></div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                                <div>
+                                    <h2 className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">Yearly Overview (বার্ষিক সারাংশ)</h2>
+                                    <div className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
+                                        {selectedYear}
                                     </div>
+                                </div>
+                                <div className="relative">
+                                    <select 
+                                        value={selectedYear}
+                                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                        className="w-full sm:w-auto bg-black/50 border border-white/10 rounded-2xl pl-5 pr-10 py-3 text-sm font-bold text-white focus:outline-none focus:border-violet-500 hover:border-white/20 transition-colors cursor-pointer appearance-none"
+                                    >
+                                        {yearsRange.map(y => (
+                                            <option key={y} value={y}>{y}</option>
+                                        ))}
+                                    </select>
+                                    <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
+                            </div>
 
-                                    {/* Mobile/Small Screen Stats overview */}
-                                    {isExpanded && (
-                                        <div className="px-4 py-2 border-t border-dashed border-white/5 flex justify-between sm:hidden text-[10px] font-bold bg-white/[0.01]">
-                                            <span className="text-emerald-400">Earn: {data.income} ৳</span>
-                                            <span className="text-rose-400">Spent: {data.expense} ৳</span>
-                                            <span className="text-violet-400">Net: {data.benefit} ৳</span>
-                                        </div>
-                                    )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mt-8 pt-6 border-t border-white/5">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">Total Income</div>
+                                    <div className="text-lg sm:text-2xl font-black text-emerald-400">+{formatMoney(yearlyIncome)} ৳</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">Total Expense</div>
+                                    <div className="text-lg sm:text-2xl font-black text-rose-400">-{formatMoney(yearlyExpense)} ৳</div>
+                                </div>
+                                <div className="col-span-2 sm:col-span-1 pt-4 sm:pt-0 border-t border-white/5 sm:border-0 mt-2 sm:mt-0">
+                                    <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">Net Balance</div>
+                                    <div className={`text-xl sm:text-2xl font-black ${yearlyBenefit >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
+                                        {yearlyBenefit >= 0 ? '+' : ''}{formatMoney(yearlyBenefit)} ৳
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                                    {/* Expanded month details drawer content */}
-                                    {isExpanded && (
-                                        <div className="p-4 bg-black/30 border-t border-white/5 space-y-2 max-h-[300px] overflow-y-auto scrollbar-hide">
-                                            {data.txs.length > 0 ? (
-                                                data.txs.map((tx) => {
-                                                    const details = categoryDetails[tx.category] || { label: tx.category, icon: '📦' };
-                                                    return (
-                                                        <div 
-                                                            key={tx.id}
-                                                            className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-3 rounded-xl hover:bg-white/[0.02]"
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-lg">{details.icon}</span>
-                                                                <div>
-                                                                    <span className="text-[11px] font-bold text-white block">{details.label}</span>
-                                                                    <span className="text-[9px] text-gray-500">{tx.date} {tx.description ? `• ${tx.description}` : ''}</span>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`text-[11px] font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                                    {tx.type === 'income' ? '+' : '-'}{tx.amount} ৳
-                                                                </span>
-                                                                <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
-                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                                    </svg>
-                                                                </button>
-                                                                <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
-                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                    </svg>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                <p className="text-[10px] text-gray-500 py-3 text-center">No transactions registered for this month</p>
+                        {/* Months Grid */}
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {monthsList.map((month) => {
+                                const data = getYearlyMonthData(month.number);
+                                const isEmpty = data.count === 0;
+
+                                return (
+                                    <Link 
+                                        key={month.number} 
+                                        href={`/dashboard?tab=monthly&month=${selectedYear}-${month.number}`}
+                                        className={`group block bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 p-5 rounded-3xl transition-all duration-300 relative overflow-hidden ${isEmpty ? 'opacity-60 hover:opacity-100 grayscale hover:grayscale-0' : 'hover:border-violet-500/30 shadow-lg'}`}
+                                    >
+                                        <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500/50 to-cyan-500/50 transition-opacity ${isEmpty ? 'opacity-0 group-hover:opacity-50' : 'opacity-0 group-hover:opacity-100'}`}></div>
+                                        
+                                        <div className="flex justify-between items-start mb-5">
+                                            <div>
+                                                <h3 className="text-sm font-extrabold text-white">{month.name}</h3>
+                                                <span className="text-[10px] text-gray-500">{data.count} records</span>
+                                            </div>
+                                            {!isEmpty && (
+                                                <div className={`px-2 py-1 rounded-lg text-[9px] uppercase tracking-widest font-black ${data.benefit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                                    {data.benefit >= 0 ? 'Profit' : 'Loss'}
+                                                </div>
                                             )}
                                         </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                        
+                                        <div className="space-y-3 text-xs font-semibold">
+                                            <div className="flex justify-between items-center text-gray-400">
+                                                <span>Income</span>
+                                                <span className={data.income > 0 ? 'text-emerald-400' : ''}>+{formatMoney(data.income)} ৳</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-gray-400">
+                                                <span>Expense</span>
+                                                <span className={data.expense > 0 ? 'text-rose-400' : ''}>-{formatMoney(data.expense)} ৳</span>
+                                            </div>
+                                            <div className="pt-3 mt-2 border-t border-white/5 flex justify-between items-center">
+                                                <span className="text-gray-300">Balance</span>
+                                                <span className={`font-black text-sm ${data.benefit >= 0 ? (data.benefit > 0 ? 'text-violet-400' : 'text-gray-500') : 'text-rose-400'}`}>
+                                                    {data.benefit >= 0 ? (data.benefit > 0 ? '+' : '') : ''}{formatMoney(data.benefit)} ৳
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Slide-Up Bottom Drawer Form Overlay */}
             <div className={`fixed inset-0 z-40 transition-opacity duration-300 ${

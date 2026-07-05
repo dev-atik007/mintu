@@ -7,14 +7,13 @@ export default function AuthenticatedLayout({ children }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     // Read active tab from URL query params client-side
+    const { url } = usePage();
     const [currentTab, setCurrentTab] = useState('daily');
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            setCurrentTab(params.get('tab') || 'daily');
-        }
-    }, [typeof window !== 'undefined' ? window.location.search : null]);
+        const searchParams = new URLSearchParams(url.includes('?') ? url.substring(url.indexOf('?')) : window.location.search);
+        setCurrentTab(searchParams.get('tab') || 'daily');
+    }, [url]);
 
     return (
         <div className="min-h-screen bg-[#07080d] text-white flex flex-col md:pl-64">
@@ -86,6 +85,22 @@ export default function AuthenticatedLayout({ children }) {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                         Monthly Summary
+                    </Link>
+
+                    {/* All Month Link */}
+                    <Link
+                        href="/dashboard?tab=all-months"
+                        onClick={() => setIsSidebarOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                            currentTab === 'all-months' && currentRoute === 'dashboard'
+                                ? 'bg-gradient-to-r from-violet-600/20 to-indigo-600/10 border border-violet-500/20 text-white font-semibold'
+                                : 'text-gray-400 hover:text-white hover:bg-white/[0.02]'
+                        }`}
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                        All Month
                     </Link>
 
                     {/* Yearly Report Link */}
