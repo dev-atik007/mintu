@@ -14,6 +14,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [TransactionController::class, 'index'])->name('dashboard');
     Route::resource('transactions', TransactionController::class)->only(['store', 'update', 'destroy']);
+    Route::resource('dukans', App\Http\Controllers\DukanController::class)->only(['index', 'store']);
 });
 
 Route::middleware('auth')->group(function () {

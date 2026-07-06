@@ -78,11 +78,25 @@ class TransactionController extends Controller
             'type' => 'required|string|in:income,expense',
             'amount' => 'required|numeric|min:0.01',
             'category' => 'required|string|max:100',
-            'date' => 'required|date',
+            'date' => 'nullable|date',
             'description' => 'nullable|string|max:255',
         ]);
 
-        $request->user()->transactions()->create($validated);
+        if (empty($validated['date'])) {
+            $validated['date'] = Carbon::today()->toDateString();
+        }
+
+        $user = $request->user();
+        $targetUserId = $user->id;
+
+        $shopId = $request->input('shop_id') ?? $request->query('shop_id');
+        if ($shopId && $user->role === 'admin') {
+            if ($user->employees()->where('id', $shopId)->exists()) {
+                $targetUserId = $shopId;
+            }
+        }
+
+        Transaction::create(array_merge($validated, ['user_id' => $targetUserId]));
 
         return redirect()->back()->with('success', 'Logged successfully!');
     }

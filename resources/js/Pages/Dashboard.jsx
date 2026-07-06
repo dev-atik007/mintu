@@ -90,6 +90,9 @@ export default function Dashboard({ transactions = [], stats = {} }) {
     const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
     const [expandedMonth, setExpandedMonth] = useState(null);
 
+    // Monthly Snapshot state
+    const [selectedSnapshotMonth, setSelectedSnapshotMonth] = useState(() => new Date().toISOString().slice(0, 7));
+
     // Toast Notification State
     const [toast, setToast] = useState(null);
 
@@ -175,7 +178,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                 },
             });
         } else {
-            post(route('transactions.store'), {
+            post(route('transactions.store', { shop_id: currentShopId }), {
                 onSuccess: () => {
                     closeDrawer();
                     showToast('Logged successfully!');
@@ -250,6 +253,11 @@ export default function Dashboard({ transactions = [], stats = {} }) {
     const monthlyIncomeBreakdown = getCategoryBreakdown('income', monthlyTransactions);
     const monthlyExpenseBreakdown = getCategoryBreakdown('expense', monthlyTransactions);
 
+    // Daily Tab Monthly Snapshot Calculations
+    const snapshotTransactions = transactions.filter(t => t.date.startsWith(selectedSnapshotMonth));
+    const snapshotIncome = snapshotTransactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
+    const snapshotExpense = snapshotTransactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
+
     // Grouping calculations for the selected year
     const getYearlyMonthData = (monthNum) => {
         const prefix = `${selectedYear}-${monthNum}`;
@@ -316,7 +324,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                     </p>
                 </div>
 
-                {activeTab === 'daily' && user.id === currentShopId && (
+                {user.id === currentShopId && activeTab === 'daily' && (
                     <div className="hidden sm:flex items-center gap-2">
                         <button
                             onClick={() => openCreateDrawer('income')}
@@ -340,23 +348,25 @@ export default function Dashboard({ transactions = [], stats = {} }) {
             {activeTab === 'daily' && (
                 <div className="space-y-6">
                     {/* Live Clock & Date Widget */}
-                    <div className="flex flex-col sm:flex-row items-center justify-between p-3.5 bg-gradient-to-r from-[#0b0c11] via-violet-950/20 to-[#0b0c11] border border-white/5 rounded-2xl shadow-lg relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 to-emerald-500/10 opacity-30 group-hover:opacity-50 transition-opacity duration-700 animate-pulse"></div>
-                        <div className="relative z-10 flex flex-col sm:items-start items-center">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> 
-                                আজকের তারিখ
-                            </span>
-                            <h2 className="text-sm sm:text-base font-black text-white text-center sm:text-left">
-                                {currentTime.toLocaleDateString('bn-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                            </h2>
+                    {user.id === currentShopId && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between p-3.5 bg-gradient-to-r from-[#0b0c11] via-violet-950/20 to-[#0b0c11] border border-white/5 rounded-2xl shadow-lg relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 to-emerald-500/10 opacity-30 group-hover:opacity-50 transition-opacity duration-700 animate-pulse"></div>
+                            <div className="relative z-10 flex flex-col sm:items-start items-center">
+                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> 
+                                    আজকের তারিখ
+                                </span>
+                                <h2 className="text-sm sm:text-base font-black text-white text-center sm:text-left">
+                                    {currentTime.toLocaleDateString('bn-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                </h2>
+                            </div>
+                            <div className="relative z-10 mt-2.5 sm:mt-0 px-3.5 py-1.5 bg-white/[0.03] border border-white/10 rounded-xl shadow-inner backdrop-blur-md">
+                                <span className="text-lg sm:text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400">
+                                    {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                                </span>
+                            </div>
                         </div>
-                        <div className="relative z-10 mt-2.5 sm:mt-0 px-3.5 py-1.5 bg-white/[0.03] border border-white/10 rounded-xl shadow-inner backdrop-blur-md">
-                            <span className="text-lg sm:text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400">
-                                {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-                            </span>
-                        </div>
-                    </div>
+                    )}
 
                     {/* Today's KPI Banner */}
                     <div className={`grid gap-3 p-4 bg-white/[0.01] border border-white/5 rounded-3xl ${user.role === 'admin' ? 'grid-cols-3' : 'grid-cols-2'}`}>
@@ -391,7 +401,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                                     <h3 className="text-sm font-extrabold text-white">Daily Earnings (আজকের আয়)</h3>
                                 </div>
-                                {user.id === currentShopId && (
+                                {(user.id === currentShopId || user.role === 'admin') && (
                                     <button
                                         onClick={() => openCreateDrawer('income')}
                                         className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg hover:bg-emerald-500/20 transition-all"
@@ -457,7 +467,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                         <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
                                         <h3 className="text-sm font-extrabold text-white">Daily Expenses (আজকের খরচ)</h3>
                                     </div>
-                                    {user.id === currentShopId && user.role === 'admin' && (
+                                    {user.role === 'admin' && (
                                         <button
                                             onClick={() => openCreateDrawer('expense')}
                                             className="text-[10px] font-extrabold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1 rounded-lg hover:bg-rose-500/20 transition-all"
@@ -510,6 +520,38 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                             </div>
                         )}
                     </div>
+
+                    {/* Monthly Snapshot Widget for Daily Tracker Tab */}
+                    <div className="mt-8 pt-8 border-t border-white/5">
+                        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
+                            <h3 className="text-sm font-extrabold text-white">Monthly Snapshot (মাসের হিসাব)</h3>
+                            <input
+                                type="month"
+                                value={selectedSnapshotMonth}
+                                onChange={(e) => setSelectedSnapshotMonth(e.target.value)}
+                                className="bg-[#0b0c11]/80 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-violet-300 focus:outline-none focus:border-violet-500 shadow-inner"
+                            />
+                        </div>
+                        
+                        <div className={`grid gap-4 ${user.role === 'admin' ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
+                            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-5 flex flex-col items-center justify-center transition-all hover:bg-emerald-500/10">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> Total Earned (আয়)</span>
+                                <span className="text-2xl font-black text-emerald-400">{formatMoney(snapshotIncome)} ৳</span>
+                            </div>
+                            {user.role === 'admin' && (
+                                <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-5 flex flex-col items-center justify-center transition-all hover:bg-rose-500/10">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div> Total Cost (খরচ)</span>
+                                    <span className="text-2xl font-black text-rose-400">{formatMoney(snapshotExpense)} ৳</span>
+                                </div>
+                            )}
+                            <div className="bg-violet-500/5 border border-violet-500/10 rounded-2xl p-5 flex flex-col items-center justify-center md:col-span-1 col-span-full transition-all hover:bg-violet-500/10">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Net Income (নীট আয়)</span>
+                                <span className={`text-2xl font-black ${snapshotIncome - snapshotExpense >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
+                                    {formatMoney(snapshotIncome - (user.role === 'admin' ? snapshotExpense : 0))} ৳
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -522,14 +564,16 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                 return (
                 <div className="space-y-6">
                     {/* Monthly KPI Stats cards */}
-                    <div className={`grid gap-3 ${user.role === 'admin' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                        <div className={`col-span-${user.role === 'admin' ? '3' : '2'} sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-violet-900/60 to-indigo-950/70 border border-violet-500/20 relative overflow-hidden shadow-md`}>
-                            <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider block mb-1">Monthly Balance (মাসিক অবশিষ্ট)</span>
-                            <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthBenefit)} ৳</h2>
-                            <span className="text-[9px] text-gray-400 block mt-1">Remaining Net Savings/Profit</span>
-                        </div>
+                    <div className={`grid gap-3 ${user.role === 'admin' ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                        {user.role === 'admin' && (
+                            <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-violet-900/60 to-indigo-950/70 border border-violet-500/20 relative overflow-hidden shadow-md">
+                                <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider block mb-1">Monthly Balance (মাসিক অবশিষ্ট)</span>
+                                <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthBenefit)} ৳</h2>
+                                <span className="text-[9px] text-gray-400 block mt-1">Remaining Net Savings/Profit</span>
+                            </div>
+                        )}
 
-                        <div className={`col-span-${user.role === 'admin' ? '3' : '2'} sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-emerald-950/40 to-[#0c1410]/80 border border-emerald-500/20 relative overflow-hidden shadow-md`}>
+                        <div className={`col-span-${user.role === 'admin' ? '3' : '1'} sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-emerald-950/40 to-[#0c1410]/80 border border-emerald-500/20 relative overflow-hidden shadow-md`}>
                             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">Monthly Earnings (মাসিক মোট আয়)</span>
                             <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthIncome)} ৳</h2>
                             <span className="text-[9px] text-gray-400 block mt-1">Total incoming cash</span>
@@ -615,17 +659,17 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xs font-extrabold text-gray-300 uppercase tracking-wider">All Monthly Records (চলতি মাসের হিসাবসমূহ)</h3>
-                            <span className="text-[10px] text-gray-500">{monthlyTransactions.length} Total Logs</span>
+                            <span className="text-[10px] text-gray-500">{user.role === 'admin' ? monthlyTransactions.length : monthlyTransactions.filter(t => t.type === 'income').length} Total Logs</span>
                         </div>
 
-                        {monthlyTransactions.length > 0 ? (
+                        {(user.role === 'admin' ? monthlyTransactions : monthlyTransactions.filter(t => t.type === 'income')).length > 0 ? (
                             <div className="space-y-6">
-                                {Object.keys(monthlyTransactions.reduce((acc, tx) => {
+                                {Object.keys((user.role === 'admin' ? monthlyTransactions : monthlyTransactions.filter(t => t.type === 'income')).reduce((acc, tx) => {
                                     if (!acc[tx.date]) acc[tx.date] = [];
                                     acc[tx.date].push(tx);
                                     return acc;
                                 }, {})).sort((a, b) => new Date(b) - new Date(a)).map(dateStr => {
-                                    const txsForDate = monthlyTransactions.filter(t => t.date === dateStr);
+                                    const txsForDate = (user.role === 'admin' ? monthlyTransactions : monthlyTransactions.filter(t => t.type === 'income')).filter(t => t.date === dateStr);
                                     const dateObj = new Date(dateStr);
                                     
                                     const bnDays = { 'Sunday': 'রবিবার', 'Monday': 'সোমবার', 'Tuesday': 'মঙ্গলবার', 'Wednesday': 'বুধবার', 'Thursday': 'বৃহস্পতিবার', 'Friday': 'শুক্রবার', 'Saturday': 'শনিবার' };
@@ -641,9 +685,15 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                         <div key={dateStr} className="space-y-3">
                                             <div className="flex items-center justify-between border-b border-white/10 pb-2">
                                                 <h4 className="text-sm font-bold text-violet-300">{formattedDate}</h4>
-                                                <span className={`text-xs font-bold ${dailyBal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                    Bal: {dailyBal >= 0 ? '+' : ''}{formatMoney(dailyBal)} ৳
-                                                </span>
+                                                {user.role === 'admin' ? (
+                                                    <span className={`text-xs font-bold ${dailyBal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                        Bal: {dailyBal >= 0 ? '+' : ''}{formatMoney(dailyBal)} ৳
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-emerald-400">
+                                                        Total: +{formatMoney(dailyIncome)} ৳
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="space-y-2">
                                                 {txsForDate.map((tx) => {
