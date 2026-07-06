@@ -11,7 +11,20 @@ class TransactionController extends Controller
 {
     public function index(Request $request)
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $userId = $user->id;
+
+        $employees = [];
+        if ($user->role === 'admin') {
+            $employees = $user->employees()->get();
+            if ($request->has('shop_id')) {
+                $shopId = $request->input('shop_id');
+                // Ensure the shop belongs to this admin
+                if ($employees->contains('id', $shopId)) {
+                    $userId = $shopId;
+                }
+            }
+        }
         $todayStr = Carbon::today()->toDateString();
         $startOfMonthStr = Carbon::now()->startOfMonth()->toDateString();
         $endOfMonthStr = Carbon::now()->endOfMonth()->toDateString();
@@ -53,7 +66,9 @@ class TransactionController extends Controller
                 'monthlyIncome' => (double) $monthlyIncome,
                 'monthlyExpense' => (double) $monthlyExpense,
                 'netBenefit' => (double) $netBenefit,
-            ]
+            ],
+            'employees' => $employees,
+            'currentShopId' => $userId,
         ]);
     }
 
@@ -74,17 +89,30 @@ class TransactionController extends Controller
 
     public function update(Request $request, Transaction $transaction)
     {
-        if ($transaction->user_id !== $request->user()->id) {
-            abort(403);
+        $user = $request->user();
+        if ($transaction->user_id !== $user->id) {
+            if ($user->role === 'admin') {
+                $isEmployee = $user->employees()->where('id', $transaction->user_id)->exists();
+                if (!$isEmployee) {
+                    abort(403);
+                }
+            } else {
+                abort(403);
+            }
         }
 
         $validated = $request->validate([
             'type' => 'required|string|in:income,expense',
             'amount' => 'required|numeric|min:0.01',
             'category' => 'required|string|max:100',
-            'date' => 'required|date',
+            // Date was removed from UI but it is still in validation. Let's make it optional or set default to today.
+            'date' => 'nullable|date',
             'description' => 'nullable|string|max:255',
         ]);
+
+        if (!isset($validated['date'])) {
+            $validated['date'] = Carbon::today()->toDateString();
+        }
 
         $transaction->update($validated);
 
@@ -93,8 +121,16 @@ class TransactionController extends Controller
 
     public function destroy(Request $request, Transaction $transaction)
     {
-        if ($transaction->user_id !== $request->user()->id) {
-            abort(403);
+        $user = $request->user();
+        if ($transaction->user_id !== $user->id) {
+            if ($user->role === 'admin') {
+                $isEmployee = $user->employees()->where('id', $transaction->user_id)->exists();
+                if (!$isEmployee) {
+                    abort(403);
+                }
+            } else {
+                abort(403);
+            }
         }
 
         $transaction->delete();

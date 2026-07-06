@@ -24,6 +24,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'admin_id',
     ];
 
     /**
@@ -52,5 +54,10 @@ class User extends Authenticatable
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function employees(): HasMany
+    {
+        return $this->hasMany(User::class, 'admin_id');
     }
 }

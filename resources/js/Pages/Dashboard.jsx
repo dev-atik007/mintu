@@ -44,10 +44,19 @@ const formatMoney = (amount) => {
 };
 
 export default function Dashboard({ transactions = [], stats = {} }) {
+    const { auth, currentShopId } = usePage().props;
+    const user = auth.user;
     const { flash } = usePage().props;
     const { url } = usePage();
     const [searchQuery, setSearchQuery] = useState('');
     
+    // Live Clock State
+    const [currentTime, setCurrentTime] = useState(new Date());
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
     // activeTab: daily (default), monthly, all-months, yearly
     const [activeTab, setActiveTab] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -307,7 +316,7 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                     </p>
                 </div>
 
-                {activeTab === 'daily' && (
+                {activeTab === 'daily' && user.id === currentShopId && (
                     <div className="hidden sm:flex items-center gap-2">
                         <button
                             onClick={() => openCreateDrawer('income')}
@@ -315,12 +324,14 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         >
                             + Earn (আয়)
                         </button>
-                        <button
-                            onClick={() => openCreateDrawer('expense')}
-                            className="px-4 py-2 rounded-xl bg-rose-600/25 border border-rose-500/30 text-rose-400 text-xs font-extrabold transition-all hover:bg-rose-600/40"
-                        >
-                            + Spend (খরচ)
-                        </button>
+                        {user.role === 'admin' && (
+                            <button
+                                onClick={() => openCreateDrawer('expense')}
+                                className="px-4 py-2 rounded-xl bg-rose-600/25 border border-rose-500/30 text-rose-400 text-xs font-extrabold transition-all hover:bg-rose-600/40"
+                            >
+                                + Spend (খরচ)
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -328,26 +339,51 @@ export default function Dashboard({ transactions = [], stats = {} }) {
             {/* DAILY TRACKER TAB VIEW */}
             {activeTab === 'daily' && (
                 <div className="space-y-6">
+                    {/* Live Clock & Date Widget */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between p-3.5 bg-gradient-to-r from-[#0b0c11] via-violet-950/20 to-[#0b0c11] border border-white/5 rounded-2xl shadow-lg relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 to-emerald-500/10 opacity-30 group-hover:opacity-50 transition-opacity duration-700 animate-pulse"></div>
+                        <div className="relative z-10 flex flex-col sm:items-start items-center">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> 
+                                আজকের তারিখ
+                            </span>
+                            <h2 className="text-sm sm:text-base font-black text-white text-center sm:text-left">
+                                {currentTime.toLocaleDateString('bn-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </h2>
+                        </div>
+                        <div className="relative z-10 mt-2.5 sm:mt-0 px-3.5 py-1.5 bg-white/[0.03] border border-white/10 rounded-xl shadow-inner backdrop-blur-md">
+                            <span className="text-lg sm:text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400">
+                                {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                            </span>
+                        </div>
+                    </div>
+
                     {/* Today's KPI Banner */}
-                    <div className="grid grid-cols-3 gap-3 p-4 bg-white/[0.01] border border-white/5 rounded-3xl">
+                    <div className={`grid gap-3 p-4 bg-white/[0.01] border border-white/5 rounded-3xl ${user.role === 'admin' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                         <div className="text-center py-2 border-r border-white/5">
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Today's Income (আজকের আয়)</span>
                             <span className="text-lg font-black text-emerald-400">{formatMoney(stats.todayIncome)} ৳</span>
                         </div>
-                        <div className="text-center py-2 border-r border-white/5">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Today's Expense (আজকের খরচ)</span>
-                            <span className="text-lg font-black text-rose-400">{formatMoney(stats.todayExpense)} ৳</span>
-                        </div>
+                        {user.role === 'admin' && (
+                            <div className="text-center py-2 border-r border-white/5">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Today's Expense (আজকের খরচ)</span>
+                                <span className="text-lg font-black text-rose-400">{formatMoney(stats.todayExpense)} ৳</span>
+                            </div>
+                        )}
                         <div className="text-center py-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Balance (অবশিষ্ট লাভ)</span>
-                            <span className={`text-lg font-black ${(stats.todayIncome - stats.todayExpense) >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
-                                {formatMoney(stats.todayIncome - stats.todayExpense)} ৳
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                                {user.role === 'admin' ? 'Balance (অবশিষ্ট লাভ)' : 'Monthly Income (মাসিক আয়)'}
+                            </span>
+                            <span className={`text-lg font-black ${user.role === 'admin' ? ((stats.todayIncome - stats.todayExpense) >= 0 ? 'text-violet-400' : 'text-rose-400') : 'text-emerald-400'}`}>
+                                {user.role === 'admin' 
+                                    ? formatMoney(stats.todayIncome - stats.todayExpense) 
+                                    : formatMoney(monthlyTransactions.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0))} ৳
                             </span>
                         </div>
                     </div>
 
                     {/* Side-by-side Tracker Section */}
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className={`grid gap-4 ${user.role === 'admin' ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
                         {/* Left column: Earn (Incomes) */}
                         <div className="bg-[#0b0c11]/40 border border-white/5 rounded-3xl p-5 flex flex-col min-h-[350px]">
                             <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
@@ -355,12 +391,14 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                                     <h3 className="text-sm font-extrabold text-white">Daily Earnings (আজকের আয়)</h3>
                                 </div>
-                                <button
-                                    onClick={() => openCreateDrawer('income')}
-                                    className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg hover:bg-emerald-500/20 transition-all"
-                                >
-                                    + Earn
-                                </button>
+                                {user.id === currentShopId && (
+                                    <button
+                                        onClick={() => openCreateDrawer('income')}
+                                        className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg hover:bg-emerald-500/20 transition-all"
+                                    >
+                                        + Earn
+                                    </button>
+                                )}
                             </div>
 
                             <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] scrollbar-hide">
@@ -376,23 +414,29 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                                     <span className="text-xl">{details.icon}</span>
                                                     <div>
                                                         <h4 className="text-xs font-bold text-white">{details.label}</h4>
-                                                        <p className="text-[9px] text-gray-500 mt-0.5">{tx.description || 'No description'}</p>
+                                                        <p className="text-[9px] text-gray-500 mt-0.5">
+                                                            {user.role === 'admin' && tx.description 
+                                                                ? tx.description 
+                                                                : new Date(tx.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-xs font-black text-emerald-400">+{formatMoney(tx.amount)} ৳</span>
-                                                    <div className="flex items-center gap-1">
-                                                        <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
-                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                            </svg>
-                                                        </button>
-                                                        <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
-                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
+                                                    {user.role === 'admin' && (
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                </svg>
+                                                            </button>
+                                                            <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -406,61 +450,65 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         </div>
 
                         {/* Right column: Spend (Expenses) */}
-                        <div className="bg-[#0b0c11]/40 border border-white/5 rounded-3xl p-5 flex flex-col min-h-[350px]">
-                            <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                                    <h3 className="text-sm font-extrabold text-white">Daily Expenses (আজকের খরচ)</h3>
-                                </div>
-                                <button
-                                    onClick={() => openCreateDrawer('expense')}
-                                    className="text-[10px] font-extrabold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1 rounded-lg hover:bg-rose-500/20 transition-all"
-                                >
-                                    + Spend
-                                </button>
-                            </div>
-
-                            <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] scrollbar-hide">
-                                {todayExpenses.length > 0 ? (
-                                    todayExpenses.map((tx) => {
-                                        const details = categoryDetails[tx.category] || { label: tx.category, icon: '📦' };
-                                        return (
-                                            <div
-                                                key={tx.id}
-                                                className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-4 rounded-2xl hover:bg-white/[0.03] transition-all"
-                                            >
-                                                <div className="flex items-center gap-2.5">
-                                                    <span className="text-xl">{details.icon}</span>
-                                                    <div>
-                                                        <h4 className="text-xs font-bold text-white">{details.label}</h4>
-                                                        <p className="text-[9px] text-gray-500 mt-0.5">{tx.description || 'No description'}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xs font-black text-rose-400">-{formatMoney(tx.amount)} ৳</span>
-                                                    <div className="flex items-center gap-1">
-                                                        <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
-                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                            </svg>
-                                                        </button>
-                                                        <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
-                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-                                        <p className="text-[11px] text-gray-500">No tailoring expenses logged for today</p>
+                        {user.role === 'admin' && (
+                            <div className="bg-[#0b0c11]/40 border border-white/5 rounded-3xl p-5 flex flex-col min-h-[350px]">
+                                <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                                        <h3 className="text-sm font-extrabold text-white">Daily Expenses (আজকের খরচ)</h3>
                                     </div>
-                                )}
+                                    {user.id === currentShopId && user.role === 'admin' && (
+                                        <button
+                                            onClick={() => openCreateDrawer('expense')}
+                                            className="text-[10px] font-extrabold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1 rounded-lg hover:bg-rose-500/20 transition-all"
+                                        >
+                                            + Spend
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] scrollbar-hide">
+                                    {todayExpenses.length > 0 ? (
+                                        todayExpenses.map((tx) => {
+                                            const details = categoryDetails[tx.category] || { label: tx.category, icon: '📦' };
+                                            return (
+                                                <div
+                                                    key={tx.id}
+                                                    className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-4 rounded-2xl hover:bg-white/[0.03] transition-all"
+                                                >
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="text-xl">{details.icon}</span>
+                                                        <div>
+                                                            <h4 className="text-xs font-bold text-white">{details.label}</h4>
+                                                            <p className="text-[9px] text-gray-500 mt-0.5">{tx.description || 'No description'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs font-black text-rose-400">-{formatMoney(tx.amount)} ৳</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                </svg>
+                                                            </button>
+                                                            <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                                            <p className="text-[11px] text-gray-500">No tailoring expenses logged for today</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -474,28 +522,30 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                 return (
                 <div className="space-y-6">
                     {/* Monthly KPI Stats cards */}
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-violet-900/60 to-indigo-950/70 border border-violet-500/20 relative overflow-hidden shadow-md">
+                    <div className={`grid gap-3 ${user.role === 'admin' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                        <div className={`col-span-${user.role === 'admin' ? '3' : '2'} sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-violet-900/60 to-indigo-950/70 border border-violet-500/20 relative overflow-hidden shadow-md`}>
                             <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider block mb-1">Monthly Balance (মাসিক অবশিষ্ট)</span>
                             <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthBenefit)} ৳</h2>
                             <span className="text-[9px] text-gray-400 block mt-1">Remaining Net Savings/Profit</span>
                         </div>
 
-                        <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-emerald-950/40 to-[#0c1410]/80 border border-emerald-500/20 relative overflow-hidden shadow-md">
+                        <div className={`col-span-${user.role === 'admin' ? '3' : '2'} sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-emerald-950/40 to-[#0c1410]/80 border border-emerald-500/20 relative overflow-hidden shadow-md`}>
                             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">Monthly Earnings (মাসিক মোট আয়)</span>
                             <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthIncome)} ৳</h2>
                             <span className="text-[9px] text-gray-400 block mt-1">Total incoming cash</span>
                         </div>
 
-                        <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-rose-950/40 to-[#170e0f]/80 border border-rose-500/20 relative overflow-hidden shadow-md">
-                            <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">Monthly Spending (মাসিক মোট খরচ)</span>
-                            <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthExpense)} ৳</h2>
-                            <span className="text-[9px] text-gray-400 block mt-1">Total outgoing cash</span>
-                        </div>
+                        {user.role === 'admin' && (
+                            <div className="col-span-3 sm:col-span-1 p-4 rounded-3xl bg-gradient-to-br from-rose-950/40 to-[#170e0f]/80 border border-rose-500/20 relative overflow-hidden shadow-md">
+                                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">Monthly Spending (মাসিক মোট খরচ)</span>
+                                <h2 className="text-xl font-black text-white">{formatMoney(selectedMonthExpense)} ৳</h2>
+                                <span className="text-[9px] text-gray-400 block mt-1">Total outgoing cash</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Monthly Breakdown Analytics progress bars */}
-                    <div className="grid gap-6 sm:grid-cols-2">
+                    <div className={`grid gap-6 ${user.role === 'admin' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
                         {/* Income breakdown */}
                         <div className="bg-white/[0.01] border border-white/5 p-5 rounded-3xl">
                             <h3 className="text-xs font-extrabold text-white mb-4 border-b border-white/5 pb-2.5 flex justify-between items-center">
@@ -528,35 +578,37 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                         </div>
 
                         {/* Expense breakdown */}
-                        <div className="bg-white/[0.01] border border-white/5 p-5 rounded-3xl">
-                            <h3 className="text-xs font-extrabold text-white mb-4 border-b border-white/5 pb-2.5 flex justify-between items-center">
-                                <span>Monthly Expense Sectors (খরচের প্রধান খাত)</span>
-                                <span className="text-[10px] text-rose-400">Total: {formatMoney(selectedMonthExpense)} ৳</span>
-                            </h3>
-                            {monthlyExpenseBreakdown.length > 0 ? (
-                                <div className="space-y-4">
-                                    {monthlyExpenseBreakdown.map((item) => {
-                                        const details = categoryDetails[item.category] || { label: item.category, icon: '📦' };
-                                        return (
-                                            <div key={item.category} className="space-y-1">
-                                                <div className="flex justify-between text-xs">
-                                                    <span className="font-semibold text-gray-300">{details.label}</span>
-                                                    <span className="text-gray-400">{formatMoney(item.amount)} ৳</span>
+                        {user.role === 'admin' && (
+                            <div className="bg-white/[0.01] border border-white/5 p-5 rounded-3xl">
+                                <h3 className="text-xs font-extrabold text-white mb-4 border-b border-white/5 pb-2.5 flex justify-between items-center">
+                                    <span>Monthly Expense Sectors (খরচের প্রধান খাত)</span>
+                                    <span className="text-[10px] text-rose-400">Total: {formatMoney(selectedMonthExpense)} ৳</span>
+                                </h3>
+                                {monthlyExpenseBreakdown.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {monthlyExpenseBreakdown.map((item) => {
+                                            const details = categoryDetails[item.category] || { label: item.category, icon: '📦' };
+                                            return (
+                                                <div key={item.category} className="space-y-1">
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="font-semibold text-gray-300">{details.label}</span>
+                                                        <span className="text-gray-400">{formatMoney(item.amount)} ৳</span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-gradient-to-r from-rose-500 to-orange-500 rounded-full"
+                                                            style={{ width: `${item.percentage}%` }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className="h-full bg-gradient-to-r from-rose-500 to-orange-500 rounded-full"
-                                                        style={{ width: `${item.percentage}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <p className="text-xs text-gray-500 py-6 text-center">No monthly spending logged</p>
-                            )}
-                        </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-500 py-6 text-center">No monthly spending logged</p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Monthly Ledger Log List */}
@@ -605,25 +657,31 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                                                                 <span className="text-xl">{details.icon}</span>
                                                                 <div>
                                                                     <h4 className="text-xs font-bold text-white">{details.label}</h4>
-                                                                    <span className="text-[9px] text-gray-500">{tx.description || 'No description'}</span>
+                                                                    <span className="text-[9px] text-gray-500">
+                                                                        {user.role === 'admin' && tx.description 
+                                                                            ? tx.description 
+                                                                            : new Date(tx.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                                                    </span>
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-3">
                                                                 <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                                     {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)} ৳
                                                                 </span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
-                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                                        </svg>
-                                                                    </button>
-                                                                    <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
-                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
+                                                                {user.role === 'admin' && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <button onClick={() => openEditDrawer(tx)} className="p-1 text-gray-500 hover:text-white">
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button onClick={() => setDeletingTxId(tx.id)} className="p-1 text-gray-500 hover:text-red-400">
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
@@ -863,47 +921,49 @@ export default function Dashboard({ transactions = [], stats = {} }) {
 
                     <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 pb-10">
                         {/* Transaction Type Toggle */}
-                        <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                                Type (ক্যাটাগরি)
-                            </label>
-                            <div className="flex bg-white/[0.02] border border-white/10 p-1 rounded-xl">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setData(prev => ({
-                                            ...prev,
-                                            type: 'income',
-                                            category: 'Shirt Stitching'
-                                        }));
-                                    }}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                        data.type === 'income'
-                                            ? 'bg-emerald-600 text-white shadow'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                >
-                                    Income (আয়)
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setData(prev => ({
-                                            ...prev,
-                                            type: 'expense',
-                                            category: 'Staff Wages'
-                                        }));
-                                    }}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                        data.type === 'expense'
-                                            ? 'bg-rose-600 text-white shadow'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                >
-                                    Expense (খরচ)
-                                </button>
+                        {user.role === 'admin' && (
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                                    Type (ক্যাটাগরি)
+                                </label>
+                                <div className="flex bg-white/[0.02] border border-white/10 p-1 rounded-xl">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setData(prev => ({
+                                                ...prev,
+                                                type: 'income',
+                                                category: 'Shirt Stitching'
+                                            }));
+                                        }}
+                                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                            data.type === 'income'
+                                                ? 'bg-emerald-600 text-white shadow'
+                                                : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Income (আয়)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setData(prev => ({
+                                                ...prev,
+                                                type: 'expense',
+                                                category: 'Staff Wages'
+                                            }));
+                                        }}
+                                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                            data.type === 'expense'
+                                                ? 'bg-rose-600 text-white shadow'
+                                                : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Expense (খরচ)
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Amount field */}
                         <div>
@@ -949,35 +1009,23 @@ export default function Dashboard({ transactions = [], stats = {} }) {
                             </div>
                         </div>
 
-                        {/* Date picker */}
-                        <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                                Date (তারিখ)
-                            </label>
-                            <input
-                                type="date"
-                                value={data.date}
-                                onChange={(e) => setData('date', e.target.value)}
-                                className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-violet-500"
-                                required
-                            />
-                            {errors.date && <p className="mt-1 text-xs text-rose-400">{errors.date}</p>}
-                        </div>
 
                         {/* Description */}
-                        <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                                Description / Client Name (গ্রাহক/বিবরণ)
-                            </label>
-                            <input
-                                type="text"
-                                value={data.description}
-                                onChange={(e) => setData('description', e.target.value)}
-                                className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-violet-500"
-                                placeholder="Add client name or note (অপশনাল)..."
-                            />
-                            {errors.description && <p className="mt-1 text-xs text-rose-400">{errors.description}</p>}
-                        </div>
+                        {user.role === 'admin' && (
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                                    Description / Client Name (গ্রাহক/বিবরণ)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={data.description}
+                                    onChange={(e) => setData('description', e.target.value)}
+                                    className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-violet-500"
+                                    placeholder="Add client name or note (অপশনাল)..."
+                                />
+                                {errors.description && <p className="mt-1 text-xs text-rose-400">{errors.description}</p>}
+                            </div>
+                        )}
 
                         {/* Submit */}
                         <div className="pt-4">
