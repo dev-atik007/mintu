@@ -141,63 +141,18 @@ export default function AuthenticatedLayout({ children }) {
                         </Link>
                     )}
 
-                    {/* Shops Section */}
-                    {user.role === 'admin' && (
-                        <>
-                            <div className="pt-4 pb-2">
-                                <h3 className="px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Shops (দোকানসমূহ)</h3>
-                            </div>
-                            
-
-
-                            {employees.map((emp, index) => (
-                                <Link
-                                    key={emp.id}
-                                    href={`/dashboard?shop_id=${emp.id}`}
-                                    onClick={() => setIsSidebarOpen(false)}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                                        currentShopId === emp.id
-                                            ? 'bg-gradient-to-r from-violet-600/20 to-indigo-600/10 border border-violet-500/20 text-white font-semibold'
-                                            : 'text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                                    }`}
-                                >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                    </svg>
-                                    Dukan {index + 1} ({emp.name})
-                                </Link>
-                            ))}
-                            <div className="pb-2 border-b border-white/5"></div>
-                        </>
-                    )}
-
-                    {/* Profile Settings link */}
-                    <Link
-                        href={route('profile.edit')}
-                        onClick={() => setIsSidebarOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                            currentRoute === 'profile.edit'
-                                ? 'bg-gradient-to-r from-violet-600/20 to-indigo-600/10 border border-violet-500/20 text-white font-semibold'
-                                : 'text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                        }`}
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Profile Settings
-                    </Link>
                 </div>
 
                 <div className="p-4 border-t border-white/5">
-                    <div className="flex items-center gap-3 mb-4 px-2">
+                    <Link href={route('profile.edit')} onClick={() => setIsSidebarOpen(false)} className="flex items-center gap-3 mb-4 px-2 hover:bg-white/5 p-2 rounded-xl transition-colors cursor-pointer">
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-500 to-indigo-600 flex items-center justify-center font-bold text-white text-sm shadow">
                             {user.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="truncate">
-                            <h4 className="text-sm font-semibold text-white truncate">{user.name}</h4>
+                            <h4 className="text-sm font-semibold text-white truncate group-hover:text-violet-300">{user.name}</h4>
                             <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
-                    </div>
+                    </Link>
                     <Link
                         href={route('logout')}
                         method="post"

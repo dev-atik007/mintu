@@ -27,22 +27,22 @@ export default function UpdateProfileInformation({
     return (
         <section className={className}>
             <header>
-                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                <h2 className="text-xl font-bold text-white mb-2">
                     Profile Information
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                <p className="mt-1 text-sm text-gray-400">
                     Update your account's profile information and email address.
                 </p>
             </header>
 
             <form onSubmit={submit} className="mt-6 space-y-6">
                 <div>
-                    <InputLabel htmlFor="name" value="Name" />
+                    <InputLabel htmlFor="name" value="Name" className="text-gray-300" />
 
                     <TextInput
                         id="name"
-                        className="mt-1 block w-full"
+                        className="mt-1.5 block w-full bg-white/[0.02] border-white/10 text-white placeholder-gray-500 focus:border-violet-500 focus:ring-violet-500/20 rounded-xl"
                         value={data.name}
                         onChange={(e) => setData('name', e.target.value)}
                         required
@@ -50,34 +50,34 @@ export default function UpdateProfileInformation({
                         autoComplete="name"
                     />
 
-                    <InputError className="mt-2" message={errors.name} />
+                    <InputError className="mt-2 text-rose-400" message={errors.name} />
                 </div>
 
                 <div>
-                    <InputLabel htmlFor="email" value="Email" />
+                    <InputLabel htmlFor="email" value="Email" className="text-gray-300" />
 
                     <TextInput
                         id="email"
                         type="email"
-                        className="mt-1 block w-full"
+                        className="mt-1.5 block w-full bg-white/[0.02] border-white/10 text-white placeholder-gray-500 focus:border-violet-500 focus:ring-violet-500/20 rounded-xl"
                         value={data.email}
                         onChange={(e) => setData('email', e.target.value)}
                         required
                         autoComplete="username"
                     />
 
-                    <InputError className="mt-2" message={errors.email} />
+                    <InputError className="mt-2 text-rose-400" message={errors.email} />
                 </div>
 
                 {mustVerifyEmail && user.email_verified_at === null && (
-                    <div>
-                        <p className="mt-2 text-sm text-gray-800 dark:text-gray-200">
+                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+                        <p className="text-sm text-orange-200">
                             Your email address is unverified.
                             <Link
                                 href={route('verification.send')}
                                 method="post"
                                 as="button"
-                                className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:text-gray-400 dark:hover:text-gray-100 dark:focus:ring-offset-gray-800"
+                                className="ml-2 rounded-md text-sm text-orange-400 underline hover:text-orange-300 focus:outline-none"
                             >
                                 Click here to re-send the verification email.
                             </Link>
@@ -92,8 +92,13 @@ export default function UpdateProfileInformation({
                     </div>
                 )}
 
-                <div className="flex items-center gap-4">
-                    <PrimaryButton disabled={processing}>Save</PrimaryButton>
+                <div className="flex items-center gap-4 pt-2">
+                    <button
+                        disabled={processing}
+                        className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold py-2.5 px-6 rounded-xl shadow-lg shadow-violet-500/25 transition-all active:scale-[0.98] disabled:opacity-70"
+                    >
+                        Save Changes
+                    </button>
 
                     <Transition
                         show={recentlySuccessful}
@@ -102,8 +107,8 @@ export default function UpdateProfileInformation({
                         leave="transition ease-in-out"
                         leaveTo="opacity-0"
                     >
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Saved.
+                        <p className="text-sm font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
+                            Saved Successfully.
                         </p>
                     </Transition>
                 </div>
